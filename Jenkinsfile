@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         NAMESPACE = 'devops-app'
-        FLASK_IMAGE = 'devops-flask:2.0'
-        REACT_IMAGE = 'devops-react:1.0'
+        FLASK_IMAGE = 'samsj/devops-flask:2.0'
+        REACT_IMAGE = 'samsj/devops-react:1.0'
     }
 
     stages {
@@ -12,26 +12,41 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'master',
+                    credentialsId: 'github-credentials',
                     url: 'https://github.com/samrajviswasam/k8s-Project.git'
             }
         }
 
-        stage('Build Flask Image') {
+        stage('Docker Login') {
             steps {
-                sh 'docker build -t ${FLASK_IMAGE} ./flask-app'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login \
+                            -u "$DOCKER_USERNAME" \
+                            --password-stdin
+                    '''
+                }
             }
         }
 
-        stage('Build React Image') {
+        stage('Pull Docker Images') {
             steps {
-                sh 'docker build -t ${REACT_IMAGE} ./react-app'
+                sh '''
+                    docker pull ${FLASK_IMAGE}
+                    docker pull ${REACT_IMAGE}
+                '''
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                    kubectl apply -f flask-app/postgres-secret.yaml
                     kubectl apply -f flask-app/postgres-pvc.yaml
                     kubectl apply -f flask-app/postgres-deployment.yaml
                     kubectl apply -f flask-app/postgres-service.yaml
@@ -52,10 +67,6 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
-                    kubectl rollout status deployment/postgres -n ${NAMESPACE}
-                    kubectl rollout status deployment/flask -n ${NAMESPACE}
-                    kubectl rollout status deployment/react -n ${NAMESPACE}
-
                     kubectl get pods -n ${NAMESPACE}
                     kubectl get services -n ${NAMESPACE}
                     kubectl get ingress -n ${NAMESPACE}
@@ -63,15 +74,38 @@ pipeline {
                 '''
             }
         }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                    kubectl rollout status deployment/flask -n ${NAMESPACE}
+                    kubectl rollout status deployment/react -n ${NAMESPACE}
+                    kubectl rollout status deployment/postgres -n ${NAMESPACE}
+                '''
+            }
+        }
+
+        stage('Rollout Status') {
+            steps {
+                sh '''
+                    kubectl get deployments -n ${NAMESPACE}
+                    kubectl get pods -n ${NAMESPACE}
+                '''
+            }
+        }
     }
 
     post {
+        always {
+            sh 'docker logout || true'
+        }
+
         success {
-            echo 'DevOps Kubernetes deployment completed successfully!'
+            echo 'CI/CD deployment completed successfully!'
         }
 
         failure {
-            echo 'Deployment failed. Check the Jenkins console output.'
+            echo 'CI/CD deployment failed. Check the Jenkins console output.'
         }
     }
 }
