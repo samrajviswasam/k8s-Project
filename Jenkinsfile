@@ -46,7 +46,7 @@ pipeline {
 
         stage('Deploy PostgreSQL') {
             steps {
-                sh '''  
+                sh '''
                     kubectl apply -f flask-app/postgres-pvc.yaml
                     kubectl apply -f flask-app/postgres-deployment.yaml
                     kubectl apply -f flask-app/postgres-service.yaml
@@ -85,7 +85,7 @@ pipeline {
             steps {
                 sh '''
                     kubectl apply -f flask-app/flask-hpa.yaml
-                '''
+            '''
             }
         }
 
@@ -113,9 +113,20 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                    kubectl rollout status deployment/postgres -n ${NAMESPACE}
-                    kubectl rollout status deployment/flask -n ${NAMESPACE}
-                    kubectl rollout status deployment/react -n ${NAMESPACE}
+                    echo "Waiting for PostgreSQL..."
+                    kubectl rollout status deployment/postgres \
+                        -n ${NAMESPACE} \
+                        --timeout=180s
+
+                    echo "Waiting for Flask..."
+                    kubectl rollout status deployment/flask \
+                        -n ${NAMESPACE} \
+                        --timeout=180s
+
+                    echo "Waiting for React..."
+                    kubectl rollout status deployment/react \
+                        -n ${NAMESPACE} \
+                        --timeout=180s
                 '''
             }
         }
@@ -128,6 +139,12 @@ pipeline {
 
                     echo "===== FINAL DEPLOYMENT STATUS ====="
                     kubectl get deployments -n ${NAMESPACE}
+
+                    echo "===== FINAL SERVICE STATUS ====="
+                    kubectl get services -n ${NAMESPACE}
+
+                    echo "===== FINAL INGRESS STATUS ====="
+                    kubectl get ingress -n ${NAMESPACE}
                 '''
             }
         }
