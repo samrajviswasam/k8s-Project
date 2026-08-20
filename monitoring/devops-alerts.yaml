@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: devops-app-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: devops-app.rules
+      rules:
+        - alert: DevopsAppPodDown
+          expr: |
+            kube_deployment_status_replicas_available{
+              namespace="devops-app",
+              deployment=~"flask|react"
+            } < 1
+          for: 1m
+          labels:
+            severity: critical
+            team: devops
+          annotations:
+            summary: "DevOps application pod is unavailable"
+            description: "A Flask or React deployment in the devops-app namespace has no available replicas."

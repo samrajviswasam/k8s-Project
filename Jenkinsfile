@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        NAMESPACE = 'devops-app'
+        NAMESPACE   = 'devops-app'
         FLASK_IMAGE = 'samsj/devops-flask:2.0'
         REACT_IMAGE = 'samsj/devops-react:1.0'
     }
@@ -35,7 +35,7 @@ pipeline {
             }
         }
 
-        stage('Pull Docker Images') {
+        stage('Get Docker Images') {
             steps {
                 sh '''
                     docker pull ${FLASK_IMAGE}
@@ -44,21 +44,64 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Create Kubernetes Namespace') {
+            steps {
+                sh '''
+                    kubectl create namespace ${NAMESPACE} \
+                    --dry-run=client -o yaml | kubectl apply -f -
+                '''
+            }
+        }
+
+        stage('Load Images into Minikube') {
+            steps {
+                sh '''
+                    minikube image load ${FLASK_IMAGE}
+                    minikube image load ${REACT_IMAGE}
+                '''
+            }
+        }
+
+        stage('Deploy PostgreSQL') {
             steps {
                 sh '''
                     kubectl apply -f flask-app/postgres-pvc.yaml
                     kubectl apply -f flask-app/postgres-deployment.yaml
                     kubectl apply -f flask-app/postgres-service.yaml
+                '''
+            }
+        }
 
+        stage('Deploy Flask') {
+            steps {
+                sh '''
                     kubectl apply -f flask-app/flask-configmap.yaml
                     kubectl apply -f flask-app/flask-deployment.yaml
                     kubectl apply -f flask-app/flask-service.yaml
+                '''
+            }
+        }
 
+        stage('Deploy React') {
+            steps {
+                sh '''
                     kubectl apply -f react-app/react-deployment.yaml
                     kubectl apply -f react-app/react-service.yaml
+                '''
+            }
+        }
 
+        stage('Deploy Ingress') {
+            steps {
+                sh '''
                     kubectl apply -f ingress.yaml
+                '''
+            }
+        }
+
+        stage('Configure HPA') {
+            steps {
+                sh '''
                     kubectl apply -f flask-app/flask-hpa.yaml
                 '''
             }
@@ -67,6 +110,7 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
+                    kubectl get deployments -n ${NAMESPACE}
                     kubectl get pods -n ${NAMESPACE}
                     kubectl get services -n ${NAMESPACE}
                     kubectl get ingress -n ${NAMESPACE}
@@ -78,18 +122,30 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
+                    kubectl rollout status deployment/postgres -n ${NAMESPACE}
                     kubectl rollout status deployment/flask -n ${NAMESPACE}
                     kubectl rollout status deployment/react -n ${NAMESPACE}
-                    kubectl rollout status deployment/postgres -n ${NAMESPACE}
                 '''
             }
         }
 
-        stage('Rollout Status') {
+        stage('Final Status') {
             steps {
                 sh '''
+                    echo "===== DEPLOYMENTS ====="
                     kubectl get deployments -n ${NAMESPACE}
+
+                    echo "===== PODS ====="
                     kubectl get pods -n ${NAMESPACE}
+
+                    echo "===== SERVICES ====="
+                    kubectl get services -n ${NAMESPACE}
+
+                    echo "===== INGRESS ====="
+                    kubectl get ingress -n ${NAMESPACE}
+
+                    echo "===== HPA ====="
+                    kubectl get hpa -n ${NAMESPACE}
                 '''
             }
         }
