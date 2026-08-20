@@ -21,7 +21,7 @@ spec:
       containers:
         - name: flask
           image: samsj/devops-flask:2.0
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
 
           ports:
             - containerPort: 5000
