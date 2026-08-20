@@ -47,6 +47,7 @@ pipeline {
         stage('Deploy PostgreSQL') {
             steps {
                 sh '''
+                    kubectl apply -f flask-app/postgres-secret.yaml  
                     kubectl apply -f flask-app/postgres-pvc.yaml
                     kubectl apply -f flask-app/postgres-deployment.yaml
                     kubectl apply -f flask-app/postgres-service.yaml
