@@ -35,29 +35,11 @@ pipeline {
             }
         }
 
-        stage('Get Docker Images') {
+        stage('Verify Docker Images') {
             steps {
                 sh '''
                     docker pull ${FLASK_IMAGE}
                     docker pull ${REACT_IMAGE}
-                '''
-            }
-        }
-
-        stage('Create Kubernetes Namespace') {
-            steps {
-                sh '''
-                    kubectl create namespace ${NAMESPACE} \
-                    --dry-run=client -o yaml | kubectl apply -f -
-                '''
-            }
-        }
-
-        stage('Load Images into Minikube') {
-            steps {
-                sh '''
-                    minikube image load ${FLASK_IMAGE}
-                    minikube image load ${REACT_IMAGE}
                 '''
             }
         }
@@ -110,10 +92,19 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
+                    echo "===== DEPLOYMENTS ====="
                     kubectl get deployments -n ${NAMESPACE}
+
+                    echo "===== PODS ====="
                     kubectl get pods -n ${NAMESPACE}
+
+                    echo "===== SERVICES ====="
                     kubectl get services -n ${NAMESPACE}
+
+                    echo "===== INGRESS ====="
                     kubectl get ingress -n ${NAMESPACE}
+
+                    echo "===== HPA ====="
                     kubectl get hpa -n ${NAMESPACE}
                 '''
             }
@@ -132,20 +123,11 @@ pipeline {
         stage('Final Status') {
             steps {
                 sh '''
-                    echo "===== DEPLOYMENTS ====="
-                    kubectl get deployments -n ${NAMESPACE}
-
-                    echo "===== PODS ====="
+                    echo "===== FINAL POD STATUS ====="
                     kubectl get pods -n ${NAMESPACE}
 
-                    echo "===== SERVICES ====="
-                    kubectl get services -n ${NAMESPACE}
-
-                    echo "===== INGRESS ====="
-                    kubectl get ingress -n ${NAMESPACE}
-
-                    echo "===== HPA ====="
-                    kubectl get hpa -n ${NAMESPACE}
+                    echo "===== FINAL DEPLOYMENT STATUS ====="
+                    kubectl get deployments -n ${NAMESPACE}
                 '''
             }
         }
